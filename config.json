@@ -1,0 +1,18 @@
+{
+  "mcpServer": {
+    "arxiv": {
+      "command": "uv",
+      "args": [
+        "--directory",
+        "프로젝트/절대/경로로/수정/필요",
+        "run",
+        "server.py"
+      ],
+      "env": {
+        "news_client_id": "",
+        "news_client_secret": "",
+        "claude_api_key": ""
+      }
+    }
+  }
+}

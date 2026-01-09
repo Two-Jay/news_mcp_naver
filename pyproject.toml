@@ -1,0 +1,12 @@
+[project]
+name = "news-mcp-server"
+version = "0.1.0"
+description = "A MCP server for news articles"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "aiohttp>=3.11.18",
+    "anthropic>=0.40.0",
+    "mcp>=1.9.1",
+    "requests>=2.32.3",
+]
