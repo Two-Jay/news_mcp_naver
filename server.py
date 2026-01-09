@@ -15,6 +15,8 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 from urllib.parse import quote
 
+from credential import anthropic_api_key, naver_client_id, naver_client_secret
+
 import aiohttp
 import anthropic
 from mcp.server import Server
@@ -87,8 +89,8 @@ class NewsMCPServer:
         self.session: Optional[aiohttp.ClientSession] = None
         
         # 환경 변수에서 API 키 로드
-        self.client_id = os.environ.get("news_client_id")
-        self.client_secret = os.environ.get("news_client_secret")
+        self.client_id = naver_client_id
+        self.client_secret = naver_client_secret
         
         if not self.client_id or not self.client_secret:
             logger.warning("Naver API credentials not found in environment variables")
@@ -96,7 +98,7 @@ class NewsMCPServer:
             logger.info("Naver API credentials loaded successfully")
         
         # Claude API 키 로드
-        self.claude_api_key = os.environ.get("claude_api_key")
+        self.claude_api_key = anthropic_api_key
         self.claude_client: Optional[anthropic.Anthropic] = None
         
         if not self.claude_api_key:
