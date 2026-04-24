@@ -1,17 +1,17 @@
 {
-  "mcpServer": {
-    "arxiv": {
+  "mcpServers": {
+    "news-mcp-server": {
       "command": "uv",
       "args": [
         "--directory",
-        "프로젝트/절대/경로로/수정/필요",
+        "/absolute/path/to/news_mcp_naver",
         "run",
         "server.py"
       ],
       "env": {
-        "news_client_id": "",
-        "news_client_secret": "",
-        "claude_api_key": ""
+        "NAVER_CLIENT_ID": "",
+        "NAVER_CLIENT_SECRET": "",
+        "ANTHROPIC_API_KEY": ""
       }
     }
   }

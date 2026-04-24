@@ -346,7 +346,7 @@ Output in Korean with JSON format."""
             return [TextContent(
                 type="text",
                 text="오류: 네이버 API 자격 증명이 설정되지 않았습니다. "
-                     "환경 변수 news_client_id와 news_client_secret을 설정해주세요."
+                     "환경 변수 NAVER_CLIENT_ID와 NAVER_CLIENT_SECRET을 설정해주세요."
             )]
         
         # 파라미터 유효성 검사
@@ -531,7 +531,7 @@ Output in Korean with JSON format."""
             return [TextContent(
                 type="text",
                 text="오류: 네이버 API 자격 증명이 설정되지 않았습니다. "
-                     "환경 변수 news_client_id와 news_client_secret을 설정해주세요."
+                     "환경 변수 NAVER_CLIENT_ID와 NAVER_CLIENT_SECRET을 설정해주세요."
             )]
         
         # 파라미터 유효성 검사
@@ -624,14 +624,14 @@ Output in Korean with JSON format."""
             return [TextContent(
                 type="text",
                 text="오류: 네이버 API 자격 증명이 설정되지 않았습니다. "
-                     "환경 변수 news_client_id와 news_client_secret을 설정해주세요."
+                     "환경 변수 NAVER_CLIENT_ID와 NAVER_CLIENT_SECRET을 설정해주세요."
             )]
         
         if not self.claude_client:
             return [TextContent(
                 type="text",
                 text="오류: Claude API 키가 설정되지 않았습니다. "
-                     "환경 변수 claude_api_key를 설정해주세요."
+                     "환경 변수 ANTHROPIC_API_KEY를 설정해주세요."
             )]
         
         # 파라미터 유효성 검사
