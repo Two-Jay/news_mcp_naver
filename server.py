@@ -12,13 +12,14 @@ import logging
 import os
 import re
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 from urllib.parse import quote
 
-from credential import anthropic_api_key, naver_client_id, naver_client_secret
+from credential import openai_api_key, naver_client_id, naver_client_secret
 
 import aiohttp
-import anthropic
+from openai import AsyncOpenAI
+from pydantic import BaseModel
 from mcp.server import Server
 from mcp.server.models import InitializationOptions
 from mcp.server.stdio import stdio_server
@@ -37,6 +38,27 @@ logger = logging.getLogger("news-mcp-server")
 
 # Naver News Search API 설정
 NAVER_API_BASE_URL = "https://openapi.naver.com/v1/search/news.json"
+
+
+class ArticleSummary(BaseModel):
+    id: str
+    news_type: Literal["Factual", "Analytical", "Predictive", "Hybrid"]
+    summary: list[str]
+
+
+class KeywordSource(BaseModel):
+    item: str
+    link: str
+
+
+class KeywordCuration(BaseModel):
+    keyword: str
+    top_sources: list[KeywordSource]
+
+
+class NewsSummaryReport(BaseModel):
+    articles: list[ArticleSummary]
+    keywords: list[KeywordCuration]
 
 
 class NewsMCPServer:
@@ -97,15 +119,15 @@ class NewsMCPServer:
         else:
             logger.info("Naver API credentials loaded successfully")
         
-        # Claude API 키 로드
-        self.claude_api_key = anthropic_api_key
-        self.claude_client: Optional[anthropic.Anthropic] = None
-        
-        if not self.claude_api_key:
-            logger.warning("Claude API key not found in environment variables")
+        # OpenAI API 키 로드
+        self.openai_api_key = openai_api_key
+        self.openai_client: Optional[AsyncOpenAI] = None
+
+        if not self.openai_api_key:
+            logger.warning("OpenAI API key not found in environment variables")
         else:
-            self.claude_client = anthropic.Anthropic(api_key=self.claude_api_key)
-            logger.info("Claude API client initialized successfully")
+            self.openai_client = AsyncOpenAI(api_key=self.openai_api_key)
+            logger.info("OpenAI API client initialized successfully")
         
         # 뉴스 요약 프롬프트 로드
         self.summary_prompt = self._load_summary_prompt()
@@ -273,7 +295,7 @@ Output in Korean with JSON format."""
                 ),
                 Tool(
                     name="search_and_summarize_news",
-                    description="키워드로 뉴스를 검색하고 Claude AI를 활용하여 전문적인 요약을 제공합니다. 뉴스 유형(사실/분석/예측/혼합)을 분류하고, 핵심 팩트와 수치를 중심으로 간결하게 요약합니다.",
+                    description="키워드로 뉴스를 검색하고 OpenAI를 활용하여 전문적인 요약을 제공합니다. 뉴스 유형(사실/분석/예측/혼합)을 분류하고, 핵심 팩트와 수치를 중심으로 간결하게 요약합니다.",
                     inputSchema={
                         "type": "object",
                         "properties": {
@@ -610,15 +632,15 @@ Output in Korean with JSON format."""
         include_keyword_curation: bool = True
     ) -> List[TextContent]:
         """
-        키워드로 뉴스를 검색하고 Claude AI로 요약합니다.
-        
+        키워드로 뉴스를 검색하고 OpenAI로 요약합니다.
+
         Args:
             keywords: 검색할 키워드 목록
             num_articles: 키워드당 검색할 기사 수
             include_keyword_curation: 키워드별 큐레이션 포함 여부
         """
         await self._ensure_session()
-        
+
         # API 자격 증명 확인
         if not self.client_id or not self.client_secret:
             return [TextContent(
@@ -626,12 +648,12 @@ Output in Korean with JSON format."""
                 text="오류: 네이버 API 자격 증명이 설정되지 않았습니다. "
                      "환경 변수 NAVER_CLIENT_ID와 NAVER_CLIENT_SECRET을 설정해주세요."
             )]
-        
-        if not self.claude_client:
+
+        if not self.openai_client:
             return [TextContent(
                 type="text",
-                text="오류: Claude API 키가 설정되지 않았습니다. "
-                     "환경 변수 ANTHROPIC_API_KEY를 설정해주세요."
+                text="오류: OpenAI API 키가 설정되지 않았습니다. "
+                     "환경 변수 OPENAI_API_KEY를 설정해주세요."
             )]
         
         # 파라미터 유효성 검사
@@ -682,76 +704,68 @@ Output in Korean with JSON format."""
                 text=f"검색된 뉴스가 없습니다. 키워드: {', '.join(keywords)}"
             )]
         
-        # Claude API로 요약 요청
+        # OpenAI API로 요약 요청
         try:
-            summary_result = await self._summarize_with_claude(
-                all_news_data, 
+            summary_result = await self._summarize_with_openai(
+                all_news_data,
                 keywords if include_keyword_curation else None
             )
             return [TextContent(type="text", text=summary_result)]
         except Exception as e:
-            logger.error(f"Claude API error: {str(e)}")
+            logger.error(f"OpenAI API error: {str(e)}")
             return [TextContent(
                 type="text",
                 text=f"요약 생성 중 오류가 발생했습니다: {str(e)}"
             )]
     
-    async def _summarize_with_claude(
+    async def _summarize_with_openai(
         self,
         news_data: List[Dict[str, Any]],
         keywords_for_curation: Optional[List[str]] = None
     ) -> str:
-        """Claude API를 사용하여 뉴스를 요약합니다."""
-        
-        # 뉴스 데이터를 Claude에 전달할 형식으로 변환
-        news_list = []
-        for item in news_data:
-            news_list.append({
-                "id": item["id"],
-                "제목": item["제목"],
-                "본문": item["본문"]
-            })
-        
+        """OpenAI Responses API를 사용하여 뉴스를 요약합니다."""
+
+        # 뉴스 데이터를 OpenAI에 전달할 형식으로 변환
+        news_list = [
+            {"id": item["id"], "제목": item["제목"], "본문": item["본문"]}
+            for item in news_data
+        ]
+
         # 사용자 메시지 구성
-        user_message_parts = []
-        user_message_parts.append("다음 뉴스 기사들을 분석하고 요약해주세요.\n")
-        user_message_parts.append(f"news_list: {json.dumps(news_list, ensure_ascii=False)}\n")
-        
+        user_message_parts = [
+            "다음 뉴스 기사들을 분석하고 요약해주세요.\n",
+            f"news_list: {json.dumps(news_list, ensure_ascii=False)}\n",
+        ]
         if keywords_for_curation:
-            user_message_parts.append(f"\nkeywords: {json.dumps(keywords_for_curation, ensure_ascii=False)}")
-        
-        user_message = "\n".join(user_message_parts)
-        
-        # Claude API 호출 (동기 방식으로 별도 스레드에서 실행)
-        loop = asyncio.get_event_loop()
-        response = await loop.run_in_executor(
-            None,
-            lambda: self.claude_client.messages.create(
-                model="claude-haiku-4-5-20251001",
-                max_tokens=20000,
-                system=self.summary_prompt,
-                messages=[
-                    {"role": "user", "content": user_message}
-                ]
+            user_message_parts.append(
+                f"\nkeywords: {json.dumps(keywords_for_curation, ensure_ascii=False)}"
             )
+        user_message = "\n".join(user_message_parts)
+
+        # OpenAI Responses API 호출 (Structured Outputs)
+        response = await self.openai_client.responses.parse(
+            model="gpt-5.4-mini",
+            instructions=self.summary_prompt,
+            input=user_message,
+            text_format=NewsSummaryReport,
+            max_output_tokens=20000,
         )
-        
-        # 응답 추출
-        result_text = response.content[0].text
-        
-        # 결과를 보기 좋게 포맷팅
-        formatted_result = self._format_summary_result(result_text, news_data)
-        
-        return formatted_result
+
+        parsed: NewsSummaryReport = response.output_parsed
+        result_text = json.dumps(
+            parsed.model_dump(), ensure_ascii=False, indent=2
+        )
+
+        return self._format_summary_result(result_text, news_data)
     
     def _format_summary_result(
         self,
-        claude_response: str,
+        openai_response: str,
         original_news: List[Dict[str, Any]]
     ) -> str:
-        """Claude 응답을 보기 좋게 포맷팅합니다."""
+        """OpenAI 응답을 보기 좋게 포맷팅합니다."""
         from datetime import datetime
-        
+
         lines = [
             "=" * 60,
             "# 📰 AI 뉴스 요약 리포트",
@@ -762,12 +776,12 @@ Output in Korean with JSON format."""
             "",
             "---",
             "",
-            "## 📋 Claude AI 분석 결과",
+            "## 📋 OpenAI 분석 결과",
             "",
         ]
-        
-        # Claude 응답 추가
-        lines.append(claude_response)
+
+        # OpenAI 응답 추가
+        lines.append(openai_response)
         lines.append("")
         lines.append("---")
         lines.append("")
@@ -792,7 +806,7 @@ Output in Korean with JSON format."""
             lines.append("")
         
         lines.append("---")
-        lines.append("*본 요약은 Claude AI를 활용하여 자동 생성되었습니다.*")
+        lines.append("*본 요약은 OpenAI를 활용하여 자동 생성되었습니다.*")
         
         return "\n".join(lines)
     
